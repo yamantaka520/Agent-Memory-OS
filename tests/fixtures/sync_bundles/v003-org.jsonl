@@ -1,0 +1,4 @@
+{"kind":"bundle","version":3}
+{"kind":"team","id":"legacy-v3","name":"Legacy v3","updated_at":"2026-01-01T01:00:00+01:00","members":["agent-a"]}
+{"kind":"project","id":"legacy-project","team_id":"legacy-v3","name":"Legacy project","updated_at":"2026-01-01T01:00:00+01:00","members":["agent-a"]}
+{"kind":"org_tombstone","tomb_kind":"project","id":"retired-project","deleted_at":"2026-01-01T01:00:00+01:00"}

@@ -1,0 +1,41 @@
+{
+  "current_writer_version": 3,
+  "supported_versions": [1, 2, 3],
+  "versions": [
+    {
+      "version": 1,
+      "schema_resource": "schemas/v001/bundle.schema.json",
+      "import_record_kinds": [
+        "memory",
+        "link",
+        "profile"
+      ],
+      "allow_unknown_record_kinds": true
+    },
+    {
+      "version": 2,
+      "schema_resource": "schemas/v002/bundle.schema.json",
+      "import_record_kinds": [
+        "memory",
+        "link",
+        "profile",
+        "tombstone"
+      ],
+      "allow_unknown_record_kinds": true
+    },
+    {
+      "version": 3,
+      "schema_resource": "schemas/v003/bundle.schema.json",
+      "import_record_kinds": [
+        "memory",
+        "link",
+        "profile",
+        "tombstone",
+        "team",
+        "project",
+        "org_tombstone"
+      ],
+      "allow_unknown_record_kinds": true
+    }
+  ]
+}

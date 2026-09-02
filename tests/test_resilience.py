@@ -46,11 +46,13 @@ def test_malformed_bundle_line_rolls_back_atomically(tmp_path, bad):
     assert _snapshot(c.store) == before
 
 
-def test_malformed_members_field_inserts_no_garbage(tmp_path):
-    """A bundle with members as a bare string must not iterate into per-character
-    members (it should coerce to empty), and must not raise."""
+def test_malformed_members_field_cannot_replace_acl_rosters(tmp_path):
+    """A malformed authoritative roster must fail before deleting membership."""
     c = _seed(tmp_path)
     c.store.create_team("t")
+    c.store.add_team_member("t", "a1")
+    c.store.create_project("p", "t")
+    c.store.add_project_member("p", "a1")
     path = tmp_path / "m.jsonl"
     path.write_text(
         json.dumps({"kind": "bundle", "version": 3}) + "\n"
@@ -58,9 +60,10 @@ def test_malformed_members_field_inserts_no_garbage(tmp_path):
                       "members": "abc", "updated_at": "2020-01-01T00:00:00+00:00"}) + "\n",
         encoding="utf-8",
     )
-    import_bundle(c.store, str(path), org_scope="full")
-    members = c.store.get_team("t")["members"]
-    assert members == []  # not ['a','b','c']
+    with pytest.raises(ValueError, match="members"):
+        import_bundle(c.store, str(path), org_scope="full")
+    assert c.store.get_team("t")["members"] == ["a1"]
+    assert c.store.get_project("p")["members"] == ["a1"]
 
 
 def test_bad_header_rejected(tmp_path):

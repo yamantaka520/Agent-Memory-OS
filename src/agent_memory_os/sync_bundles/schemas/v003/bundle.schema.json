@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-memory-os:sync-bundle:v003",
+  "title": "AgentMemoryOS sync bundle v3 import profile",
+  "description": "A guaranteed v3 import shape for one JSONL line; version 3 adds organization records to version 2.",
+  "oneOf": [
+    {"$ref": "#/$defs/header"},
+    {"$ref": "#/$defs/record"}
+  ],
+  "$defs": {
+    "header": {
+      "type": "object",
+      "required": ["kind", "version"],
+      "properties": {
+        "kind": {"const": "bundle"},
+        "version": {"const": 3},
+        "node_name": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "team": {
+      "type": "object",
+      "required": ["kind", "id", "name", "updated_at", "members"],
+      "properties": {
+        "kind": {"const": "team"},
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "updated_at": {"type": "string", "minLength": 1},
+        "members": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": true
+    },
+    "project": {
+      "type": "object",
+      "required": ["kind", "id", "team_id", "name", "updated_at", "members"],
+      "properties": {
+        "kind": {"const": "project"},
+        "id": {"type": "string"},
+        "team_id": {"type": "string"},
+        "name": {"type": "string"},
+        "updated_at": {"type": "string", "minLength": 1},
+        "members": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      },
+      "additionalProperties": true
+    },
+    "orgTombstone": {
+      "type": "object",
+      "required": ["kind", "tomb_kind", "id", "deleted_at"],
+      "properties": {
+        "kind": {"const": "org_tombstone"},
+        "tomb_kind": {"enum": ["team", "project"]},
+        "id": {"type": "string"},
+        "deleted_at": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    },
+    "unknownRecord": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "enum": [
+              "bundle", "memory", "link", "profile", "tombstone",
+              "team", "project", "org_tombstone"
+            ]
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "record": {
+      "oneOf": [
+        {"$ref": "urn:agent-memory-os:sync-bundle:v001#/$defs/memory"},
+        {"$ref": "urn:agent-memory-os:sync-bundle:v001#/$defs/link"},
+        {"$ref": "urn:agent-memory-os:sync-bundle:v001#/$defs/profile"},
+        {"$ref": "urn:agent-memory-os:sync-bundle:v002#/$defs/tombstone"},
+        {"$ref": "#/$defs/team"},
+        {"$ref": "#/$defs/project"},
+        {"$ref": "#/$defs/orgTombstone"},
+        {"$ref": "#/$defs/unknownRecord"}
+      ]
+    }
+  }
+}

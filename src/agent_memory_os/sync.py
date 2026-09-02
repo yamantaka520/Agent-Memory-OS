@@ -26,7 +26,15 @@ from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
 
+from .constants import SYNC_HTTP_TIMEOUT_SECONDS, SYNC_MAX_FUTURE_SKEW_SECONDS
 from .schema import normalize_iso_timestamp
+from .sync_bundles import CURRENT_BUNDLE_VERSION, contract_for
+from .sync_bundles.codec import (
+    decode_header,
+    decode_record,
+    encode_header,
+    encode_record,
+)
 
 
 def _guard(lock):
@@ -37,7 +45,6 @@ def _guard(lock):
     """
     return lock if lock is not None else nullcontext()
 
-BUNDLE_VERSION = 3
 _MEMORY_KEYS = (
     "id", "owner", "scope", "type", "content", "summary", "tags", "visibility",
     "source", "confidence", "importance", "created_at", "updated_at", "acl_updated_at",
@@ -76,11 +83,6 @@ def _incoming_wins(inc_ts: str, inc_content: str, ex_ts: str, ex_content: str) -
     return inc_content > ex_content  # same instant: larger content wins, deterministically
 
 
-# A forged far-future timestamp would win LWW forever and could never be
-# corrected by a legitimate later edit. Reject org timestamps beyond now+skew.
-_MAX_FUTURE_SKEW_SECONDS = 300
-
-
 def _ts_too_future(value: str | None) -> bool:
     """True if an incoming org timestamp is implausibly far in the future."""
     norm = _norm_ts(value)
@@ -91,7 +93,7 @@ def _ts_too_future(value: str | None) -> bool:
     except ValueError:
         return False
     now = datetime.now(ts.tzinfo) if ts.tzinfo else datetime.utcnow()
-    return (ts - now).total_seconds() > _MAX_FUTURE_SKEW_SECONDS
+    return (ts - now).total_seconds() > SYNC_MAX_FUTURE_SKEW_SECONDS
 
 
 def _org_member_wins(inc_members, ex_members) -> bool:
@@ -178,14 +180,18 @@ def export_bundle(
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     exported_ids: set[str] = set()
     with path.open("w", encoding="utf-8") as handle:
-        header = {"kind": "bundle", "version": BUNDLE_VERSION}
-        if node_name:
-            header["node_name"] = node_name
+        contract = contract_for(CURRENT_BUNDLE_VERSION)
+        header = encode_header(contract, node_name=node_name)
         handle.write(json.dumps(header, ensure_ascii=False) + "\n")
+
+        def _write_record(record: dict, *, ensure_ascii: bool = False) -> None:
+            encoded = encode_record(contract, record)
+            handle.write(json.dumps(encoded, ensure_ascii=ensure_ascii) + "\n")
+
         for row in store.conn.execute(f"SELECT * FROM memories {where}", params):
             payload = {key: row[key] for key in _MEMORY_KEYS}
             exported_ids.add(row["id"])
-            handle.write(json.dumps({"kind": "memory", **payload}, ensure_ascii=False) + "\n")
+            _write_record({"kind": "memory", **payload})
             counts["memories"] += 1
         link_where, link_params = ("WHERE updated_at > ?", [since]) if since else ("", [])
         for row in store.conn.execute(f"SELECT * FROM memory_links {link_where}", link_params):
@@ -194,7 +200,7 @@ def export_bundle(
             if not (row["src_id"] in exported_ids and row["dst_id"] in exported_ids):
                 continue
             payload = {key: row[key] for key in _LINK_KEYS}
-            handle.write(json.dumps({"kind": "link", **payload}, ensure_ascii=False) + "\n")
+            _write_record({"kind": "link", **payload})
             counts["links"] += 1
         members = None
         if project:
@@ -207,11 +213,12 @@ def export_bundle(
         for row in store.conn.execute("SELECT * FROM recall_profiles"):
             if members is not None and row["agent_id"] not in members:
                 continue
-            handle.write(json.dumps({"kind": "profile", **dict(row)}, ensure_ascii=False) + "\n")
+            _write_record({"kind": "profile", **dict(row)})
             counts["profiles"] += 1
         for mem_id, deleted_at in store.list_tombstones(since=since):
-            handle.write(
-                json.dumps({"kind": "tombstone", "id": mem_id, "deleted_at": deleted_at}) + "\n"
+            _write_record(
+                {"kind": "tombstone", "id": mem_id, "deleted_at": deleted_at},
+                ensure_ascii=True,
             )
             counts["tombstones"] += 1
         # Org structure (federate teams/projects/memberships so ACL definitions
@@ -247,21 +254,27 @@ def export_bundle(
             for t in team_rows:
                 if not _fresh(t):
                     continue
-                handle.write(json.dumps({
+                _write_record({
                     "kind": "team", "id": t["id"], "name": t["name"],
                     "updated_at": t["updated_at"], "members": t["members"],
-                }, ensure_ascii=False) + "\n")
+                })
             for pr in project_rows:
                 if not _fresh(pr):
                     continue
-                handle.write(json.dumps({
+                _write_record({
                     "kind": "project", "id": pr["id"], "team_id": pr["team_id"], "name": pr["name"],
                     "updated_at": pr["updated_at"], "members": pr["members"],
-                }, ensure_ascii=False) + "\n")
+                })
             for tkind, tid, deleted_at in store.list_org_tombstones(since=since):
-                handle.write(json.dumps({
-                    "kind": "org_tombstone", "tomb_kind": tkind, "id": tid, "deleted_at": deleted_at,
-                }) + "\n")
+                _write_record(
+                    {
+                        "kind": "org_tombstone",
+                        "tomb_kind": tkind,
+                        "id": tid,
+                        "deleted_at": deleted_at,
+                    },
+                    ensure_ascii=True,
+                )
     return counts
 
 
@@ -294,14 +307,15 @@ def import_bundle(
     }
     # A semi-trusted peer must not forge a memory authored by one of OUR local
     # agents (impersonation). Compute the guarded id set once.
-    local_agents = set() if trusted else {a["id"] for a in store.list_agents()}
+    local_agents: set[str] = (
+        set() if trusted else {a["id"] for a in store.list_agents()}
+    )
     try:
         with path.open("r", encoding="utf-8") as handle:
             header = json.loads(handle.readline())
-            if header.get("kind") != "bundle" or header.get("version") not in (1, 2, 3):
-                raise ValueError("not a compatible agent-memory-os bundle")
+            contract, _ = decode_header(header)
             for line in handle:
-                entry = json.loads(line)
+                entry = decode_record(contract, json.loads(line))
                 kind = entry.pop("kind")
                 if kind == "memory":
                     _merge_memory(
@@ -330,8 +344,15 @@ def import_bundle(
     return stats
 
 
-def _merge_memory(store, entry: dict, stats: dict, *, source_peer=None,
-                  trusted=True, local_agents=frozenset()) -> None:
+def _merge_memory(
+    store,
+    entry: dict,
+    stats: dict,
+    *,
+    source_peer=None,
+    trusted=True,
+    local_agents: set[str] | frozenset[str] = frozenset(),
+) -> None:
     entry = dict(entry)
     if entry.get("expires_at") is not None:
         try:
@@ -466,14 +487,18 @@ def _apply_tombstone(store, entry: dict, stats: dict) -> None:
 
 
 def _clean_members(value) -> list[str]:
-    """Coerce a bundle's `members` field to a clean list of id strings.
+    """Return a safe authoritative member list or reject the whole bundle.
 
-    Defends against a malformed bundle where members is a bare string (which
-    would iterate into per-character garbage members) or contains non-strings.
+    Membership records replace existing ACL rosters. Coercing malformed input
+    to an empty or partial list would therefore turn a shape error into a
+    deletion. Validation must happen before the first destructive statement.
     """
-    if not isinstance(value, list):
-        return []
-    return [str(m) for m in value if isinstance(m, (str, int)) and str(m)]
+    if not isinstance(value, list) or any(
+        not isinstance(member, str) or not member
+        for member in value
+    ):
+        raise ValueError("bundle members must be an array of non-empty strings")
+    return list(value)
 
 
 def _org_tomb_at(store, kind: str, id_: str) -> str | None:
@@ -541,9 +566,12 @@ def _merge_project(store, entry: dict, stats: dict, *, org_scope: str | None) ->
     team_id = entry.get("team_id") or ""
     # A team-scoped peer may assert a project only if it belongs to that team;
     # trust the record's team_id, falling back to the local parent when absent.
-    parent = team_id or (lambda r: r[0] if r else None)(
-        store.conn.execute("SELECT team_id FROM projects WHERE id = ?", (pid,)).fetchone()
-    )
+    parent = team_id
+    if not parent:
+        parent_row = store.conn.execute(
+            "SELECT team_id FROM projects WHERE id = ?", (pid,)
+        ).fetchone()
+        parent = parent_row[0] if parent_row else None
     if not _org_scope_allows(org_scope, "project", pid, team_of=parent):
         stats["org_records_rejected"] += 1
         return
@@ -710,7 +738,7 @@ def _org_scope_for_policy(policy: str) -> str | None:
     """
     if policy == "full":
         return "full"
-    if policy.startswith("team:") or policy.startswith("project:"):
+    if policy.startswith(("team:", "project:")):
         return policy
     return None
 
@@ -739,7 +767,7 @@ def pull_from_peer(client, base_url: str, *, since: str | None = None,
         first_nl = body.find("\n")
         header = json.loads(body[:first_nl] if first_nl >= 0 else body)
         peer_node_name = str(header.get("node_name") or "").strip()
-    except Exception:  # noqa: BLE001 - header parse is best-effort
+    except Exception:  # noqa: BLE001, S110 - header metadata is best-effort
         pass
     with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as handle:
         handle.write(body)
@@ -762,9 +790,13 @@ def push_to_peer(client, base_url: str, *, since: str | None = None,
     import tempfile
 
     export_kwargs = _export_kwargs_for_policy(policy)
-    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False, encoding="utf-8") as handle:
-        with _guard(lock):
-            client.export_bundle(handle.name, since=since, **export_kwargs)
+    with (
+        tempfile.NamedTemporaryFile(
+            "w", suffix=".jsonl", delete=False, encoding="utf-8"
+        ) as handle,
+        _guard(lock),
+    ):
+        client.export_bundle(handle.name, since=since, **export_kwargs)
     try:
         payload = Path(handle.name).read_text(encoding="utf-8")
     finally:
@@ -866,5 +898,9 @@ def _http(url: str, *, token: str | None, post: str | None = None) -> str:
     # check + system trust store). http:// peers are unaffected; confidentiality
     # over plain HTTP comes from the app-layer bundle encryption instead.
     context = ssl.create_default_context() if url.startswith("https://") else None
-    with urllib.request.urlopen(request, timeout=30, context=context) as response:
+    with urllib.request.urlopen(
+        request,
+        timeout=SYNC_HTTP_TIMEOUT_SECONDS,
+        context=context,
+    ) as response:
         return response.read().decode("utf-8")

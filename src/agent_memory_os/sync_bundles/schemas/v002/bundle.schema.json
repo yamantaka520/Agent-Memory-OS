@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-memory-os:sync-bundle:v002",
+  "title": "AgentMemoryOS sync bundle v2 import profile",
+  "description": "A guaranteed v2 import shape for one JSONL line; version 2 adds tombstones to version 1.",
+  "oneOf": [
+    {"$ref": "#/$defs/header"},
+    {"$ref": "#/$defs/record"}
+  ],
+  "$defs": {
+    "header": {
+      "type": "object",
+      "required": ["kind", "version"],
+      "properties": {
+        "kind": {"const": "bundle"},
+        "version": {"const": 2},
+        "node_name": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "tombstone": {
+      "type": "object",
+      "required": ["kind", "id", "deleted_at"],
+      "properties": {
+        "kind": {"const": "tombstone"},
+        "id": {"type": "string"},
+        "deleted_at": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    },
+    "unknownRecord": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "enum": [
+              "bundle", "memory", "link", "profile", "tombstone",
+              "team", "project", "org_tombstone"
+            ]
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "record": {
+      "oneOf": [
+        {"$ref": "urn:agent-memory-os:sync-bundle:v001#/$defs/memory"},
+        {"$ref": "urn:agent-memory-os:sync-bundle:v001#/$defs/link"},
+        {"$ref": "urn:agent-memory-os:sync-bundle:v001#/$defs/profile"},
+        {"$ref": "#/$defs/tombstone"},
+        {"$ref": "#/$defs/unknownRecord"}
+      ]
+    }
+  }
+}

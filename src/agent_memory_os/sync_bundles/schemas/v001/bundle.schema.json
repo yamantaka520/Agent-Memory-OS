@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:agent-memory-os:sync-bundle:v001",
+  "title": "AgentMemoryOS sync bundle v1 import profile",
+  "description": "A guaranteed v1 import shape for one JSONL line; not an exhaustive rejection policy.",
+  "oneOf": [
+    {"$ref": "#/$defs/header"},
+    {"$ref": "#/$defs/record"}
+  ],
+  "$defs": {
+    "legacyTimestamp": {"type": "string", "minLength": 1},
+    "optionalLegacyTimestamp": {
+      "anyOf": [
+        {"$ref": "#/$defs/legacyTimestamp"},
+        {"type": "null"}
+      ]
+    },
+    "jsonObjectText": {
+      "type": "string",
+      "contentMediaType": "application/json",
+      "contentSchema": {"type": "object"}
+    },
+    "jsonStringArrayText": {
+      "type": "string",
+      "contentMediaType": "application/json",
+      "contentSchema": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1}
+      }
+    },
+    "jsonWeightMapText": {
+      "type": "string",
+      "contentMediaType": "application/json",
+      "contentSchema": {
+        "type": "object",
+        "additionalProperties": {"type": "number"}
+      }
+    },
+    "header": {
+      "type": "object",
+      "required": ["kind", "version"],
+      "properties": {
+        "kind": {"const": "bundle"},
+        "version": {"const": 1},
+        "node_name": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "memory": {
+      "type": "object",
+      "required": [
+        "kind", "id", "owner", "scope", "type", "content", "summary",
+        "tags", "visibility", "source", "confidence", "importance",
+        "created_at", "updated_at", "decay_policy", "decay_half_life_days",
+        "access_count", "pinned", "helpful_count", "unhelpful_count"
+      ],
+      "properties": {
+        "kind": {"const": "memory"},
+        "id": {"type": "string"},
+        "owner": {"type": "string"},
+        "scope": {"type": "string"},
+        "type": {"type": "string"},
+        "content": {"type": "string"},
+        "summary": {"type": "string"},
+        "tags": {"$ref": "#/$defs/jsonStringArrayText"},
+        "visibility": {"$ref": "#/$defs/jsonStringArrayText"},
+        "source": {"$ref": "#/$defs/jsonObjectText"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "importance": {"type": "number", "minimum": 0, "maximum": 1},
+        "created_at": {"$ref": "#/$defs/legacyTimestamp"},
+        "updated_at": {"$ref": "#/$defs/legacyTimestamp"},
+        "acl_updated_at": {"$ref": "#/$defs/optionalLegacyTimestamp"},
+        "expires_at": {"$ref": "#/$defs/optionalLegacyTimestamp"},
+        "decay_policy": {"enum": ["exponential", "linear", "none"]},
+        "decay_half_life_days": {"type": "number"},
+        "last_accessed_at": {"$ref": "#/$defs/optionalLegacyTimestamp"},
+        "access_count": {"type": "integer", "minimum": 0},
+        "pinned": {"enum": [0, 1]},
+        "helpful_count": {"type": "integer", "minimum": 0},
+        "unhelpful_count": {"type": "integer", "minimum": 0}
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "decay_policy": {"const": "none"},
+            "decay_half_life_days": {"type": "number"}
+          }
+        },
+        {
+          "properties": {
+            "decay_policy": {"enum": ["exponential", "linear"]},
+            "decay_half_life_days": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      ],
+      "additionalProperties": true
+    },
+    "link": {
+      "type": "object",
+      "required": [
+        "kind", "src_id", "dst_id", "relation", "weight", "created_at",
+        "updated_at", "activation_count", "source"
+      ],
+      "properties": {
+        "kind": {"const": "link"},
+        "src_id": {"type": "string", "minLength": 1},
+        "dst_id": {"type": "string", "minLength": 1},
+        "relation": {
+          "enum": [
+            "related_to", "supersedes", "caused_by", "derived_from",
+            "co_recalled"
+          ]
+        },
+        "weight": {"type": "number", "minimum": 0, "maximum": 1},
+        "created_at": {"$ref": "#/$defs/legacyTimestamp"},
+        "updated_at": {"$ref": "#/$defs/legacyTimestamp"},
+        "last_activated_at": {"$ref": "#/$defs/optionalLegacyTimestamp"},
+        "activation_count": {"type": "integer", "minimum": 0},
+        "source": {"$ref": "#/$defs/jsonObjectText"}
+      },
+      "additionalProperties": true
+    },
+    "profile": {
+      "type": "object",
+      "required": ["kind", "agent_id", "type_weights", "scope_weights", "updated_at"],
+      "properties": {
+        "kind": {"const": "profile"},
+        "agent_id": {"type": "string", "minLength": 1},
+        "type_weights": {"$ref": "#/$defs/jsonWeightMapText"},
+        "scope_weights": {"$ref": "#/$defs/jsonWeightMapText"},
+        "updated_at": {"$ref": "#/$defs/legacyTimestamp"}
+      },
+      "additionalProperties": true
+    },
+    "unknownRecord": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "enum": [
+              "bundle", "memory", "link", "profile", "tombstone",
+              "team", "project", "org_tombstone"
+            ]
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "record": {
+      "oneOf": [
+        {"$ref": "#/$defs/memory"},
+        {"$ref": "#/$defs/link"},
+        {"$ref": "#/$defs/profile"},
+        {"$ref": "#/$defs/unknownRecord"}
+      ]
+    }
+  }
+}
