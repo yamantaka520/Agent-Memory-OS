@@ -995,9 +995,15 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
             raise HTTPException(status_code=400,
                                 detail="target is not a registered peer of this console")
         body = await request.body()
+        try:
+            request_payload = None if not body else json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise HTTPException(
+                status_code=400, detail="request body must be valid UTF-8 JSON",
+            ) from exc
         status, payload = signed_call(
             keypair, url, request.method, target,
-            payload=None if not body else json.loads(body.decode("utf-8")),
+            payload=request_payload,
         )
         if status == 0:
             raise HTTPException(status_code=502, detail=f"node unreachable: {payload}")

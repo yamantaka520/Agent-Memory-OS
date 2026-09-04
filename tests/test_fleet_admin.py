@@ -12,6 +12,9 @@ The trust model under test:
 
 from __future__ import annotations
 
+import json
+from unittest.mock import Mock
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -420,6 +423,72 @@ def test_fleet_proxy_forwards_get_and_post(small_fleet):
     key_id = small_fleet["keypair"]["key_id"]
     assert any(e["actor"] == f"fleet:{key_id}" and "owners/reassign" in e["detail"]
                for e in entries)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(b"{", id="malformed-json"),
+        pytest.param(b"\xff", id="invalid-utf8"),
+    ],
+)
+def test_fleet_proxy_rejects_invalid_body_before_signing(small_fleet, monkeypatch, body):
+    from agent_memory_os import fleet as fleet_mod
+
+    signed_call = Mock(wraps=fleet_mod.signed_call)
+    monkeypatch.setattr(fleet_mod, "signed_call", signed_call)
+    with TestClient(
+        create_app(home=small_fleet["home"]), raise_server_exceptions=False,
+    ) as http:
+        # Prove this configured console can sign and forward a valid request
+        # before asserting that invalid input never reaches the signer.
+        control = http.get(
+            "/api/fleet/proxy",
+            params={"url": "http://node-a:8000", "path": "/api/stats"},
+        )
+        assert control.status_code == 200
+        signed_call.assert_called_once()
+        signed_call.reset_mock()
+
+        response = http.post(
+            "/api/fleet/proxy",
+            params={"url": "http://node-a:8000", "path": "/api/owners/reassign"},
+            headers={"Content-Type": "application/json"},
+            content=body,
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "request body must be valid UTF-8 JSON"
+        signed_call.assert_not_called()
+
+
+def test_fleet_proxy_preserves_valid_and_empty_request_bodies(small_fleet, monkeypatch):
+    from agent_memory_os import fleet as fleet_mod
+
+    transport = Mock(wraps=fleet_mod._http_request)
+    monkeypatch.setattr(fleet_mod, "_http_request", transport)
+    payload = {"old_owner": "node-a", "new_owner": "renamed"}
+    with _console_http(small_fleet) as http:
+        valid = http.post(
+            "/api/fleet/proxy",
+            params={"url": "http://node-a:8000", "path": "/api/owners/reassign"},
+            json=payload,
+        )
+        assert valid.status_code == 200
+        assert valid.json()["changed"]["memories_owner"] == 1
+
+        empty = http.post(
+            "/api/fleet/proxy",
+            params={"url": "http://node-a:8000", "path": "/api/sync/run"},
+            content=b"",
+        )
+        assert empty.status_code == 200
+        assert empty.json() == {"results": []}
+
+    assert transport.call_count == 2
+    valid_args, empty_args = [call.args for call in transport.call_args_list]
+    assert valid_args[:3] == ("http://node-a:8000", "POST", "/api/owners/reassign")
+    assert json.loads(valid_args[3]) == payload
+    assert empty_args[:4] == ("http://node-a:8000", "POST", "/api/sync/run", b"")
 
 
 def test_fleet_proxy_guard_rails(small_fleet):
