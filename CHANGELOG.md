@@ -4,6 +4,10 @@ All notable changes, newest first. Releases are published to
 [PyPI](https://pypi.org/project/agent-memory-os/) via Trusted Publishing and
 tagged on GitHub/GitLab.
 
+## [Unreleased]
+
+- **Fix: malformed fleet-proxy bodies return HTTP 400.** Invalid UTF-8 or JSON is rejected locally before signing or forwarding the request. Valid JSON and empty request bodies keep their existing forwarding behavior.
+
 ## [1.9.0] — 2026-08-19
 
 - **Team rename, in the CLI and the console.** A team id is not just a row key:
