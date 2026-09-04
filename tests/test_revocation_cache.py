@@ -13,7 +13,11 @@ memory as a weak match, so counts are noisy but membership of a given item is ex
 
 from __future__ import annotations
 
+import pytest
+from fastapi.testclient import TestClient
+
 from agent_memory_os import MemoryClient
+from agent_memory_os.web_app import create_app
 
 TEAM_MEM = "Apollo incident channel is #apollo-oncall."
 PROJ_MEM = "Web API key rotates Mondays."
@@ -117,3 +121,81 @@ def test_other_connection_membership_revoke_invalidates_all_acl_caches(tmp_path)
     }
     reader.close()
     writer.close()
+
+
+@pytest.fixture
+def team_acl_records(tmp_path):
+    writer = MemoryClient(home=tmp_path)
+    try:
+        for agent_id in ("alice", "bob"):
+            writer.store.register_agent(agent_id)
+        writer.create_team("apollo")
+        writer.add_team_member("apollo", "alice")
+        writer.add_team_member("apollo", "bob")
+        first = writer.add(
+            "Cross-connection direct-read sentinel.",
+            owner="alice",
+            visibility=["team:apollo"],
+        )
+        second = writer.add(
+            "Cross-connection graph neighbor.",
+            owner="alice",
+            visibility=["team:apollo"],
+        )
+        writer.link(first.id, second.id)
+        yield writer, first, second
+    finally:
+        writer.close()
+
+
+@pytest.mark.parametrize("read_path", ["get_visible", "list_recent", "graph_snapshot"])
+def test_other_connection_membership_revoke_refreshes_uncached_read_paths(
+    tmp_path, team_acl_records, read_path,
+):
+    """A committed membership revoke must reach the reader's next ACL check."""
+    writer, first, second = team_acl_records
+    reader = MemoryClient(home=tmp_path)
+    try:
+        def visible_ids():
+            if read_path == "get_visible":
+                record = reader.get_visible(first.id, requester_agent_id="bob")
+                return {record.id} if record else set()
+            if read_path == "list_recent":
+                return {record.id for record in reader.list_recent(requester_agent_id="bob")}
+            graph = reader.graph_snapshot(requester_agent_id="bob")
+            return {node["id"] for node in graph["nodes"]}
+
+        expected = {first.id} if read_path == "get_visible" else {first.id, second.id}
+        assert visible_ids() == expected
+        writer.remove_team_member("apollo", "bob")
+        assert {first.id, second.id}.isdisjoint(visible_ids())
+    finally:
+        reader.close()
+
+
+@pytest.mark.parametrize("read_path", ["by_id", "list", "graph"])
+def test_web_reads_refresh_after_cross_process_membership_revoke(
+    tmp_path, team_acl_records, read_path,
+):
+    """The web app must observe membership revocation from another connection."""
+    writer, first, second = team_acl_records
+    with TestClient(create_app(home=tmp_path)) as web:
+        def visible_ids():
+            if read_path == "by_id":
+                response = web.get(
+                    f"/api/memories/{first.id}", params={"requester_agent_id": "bob"},
+                )
+                assert response.status_code in (200, 404), response.text
+                return {response.json()["id"]} if response.status_code == 200 else set()
+            if read_path == "list":
+                response = web.get("/api/memories", params={"requester_agent_id": "bob"})
+                assert response.status_code == 200, response.text
+                return {record["id"] for record in response.json()["memories"]}
+            response = web.get("/api/graph", params={"requester_agent_id": "bob"})
+            assert response.status_code == 200, response.text
+            return {node["id"] for node in response.json()["nodes"]}
+
+        expected = {first.id} if read_path == "by_id" else {first.id, second.id}
+        assert visible_ids() == expected
+        writer.remove_team_member("apollo", "bob")
+        assert {first.id, second.id}.isdisjoint(visible_ids())
