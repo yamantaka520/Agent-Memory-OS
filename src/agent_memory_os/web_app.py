@@ -22,6 +22,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
+from starlette._utils import get_route_path
 
 from .client import MemoryClient
 from .schema import (
@@ -361,7 +362,8 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
                 request.method, target, body, timestamp, nonce)
             if not _crypto.fleet_verify(admin["public_key"], message, signature):
                 return False, key_id, "invalid signature"
-            required = _fleet_required_cap(request.url.path)
+            # Capabilities follow routing; signatures bind the original target.
+            required = _fleet_required_cap(get_route_path(request.scope))
             if required not in admin["caps"]:
                 return False, key_id, f"capability '{required}' not granted"
             # Consume the nonce LAST — only a fully valid signature may burn
@@ -377,14 +379,16 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
 
         @app.middleware("http")
         async def require_token(request, call_next):
+            # Match the router's path so a mount prefix cannot skip the gate.
+            route_path = get_route_path(request.scope)
             # Pairing redemption authenticates with the one-time invite code
             # itself (the whole exchange is encrypted under it) — a joiner by
             # definition has no bearer token yet. Everything else under /api/
             # stays token-gated.
-            if (request.url.path == "/api/pairing/redeem"
+            if (route_path == "/api/pairing/redeem"
                     and request.method == "POST"):
                 return await call_next(request)
-            if request.url.path.startswith("/api/"):
+            if route_path.startswith("/api/"):
                 supplied = request.headers.get("authorization", "")
                 full = _authorizes(supplied, api_token) if api_token else False
                 ro = _authorizes(supplied, ro_token) if ro_token else False
@@ -392,7 +396,7 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
                 allowed = (
                     full
                     or (ro and request.method in safe_methods)
-                    or (sync and _sync_scoped(request.url.path, request.method))
+                    or (sync and _sync_scoped(route_path, request.method))
                 )
                 fleet_reason = ""
                 if not allowed and request.headers.get("x-amos-fleet-key-id"):
