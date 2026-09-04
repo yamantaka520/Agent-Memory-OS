@@ -4,6 +4,10 @@ All notable changes, newest first. Releases are published to
 [PyPI](https://pypi.org/project/agent-memory-os/) via Trusted Publishing and
 tagged on GitHub/GitLab.
 
+## [Unreleased]
+
+- **Fix: team-member revocations take effect on direct, list, and graph reads after another connection commits.** These client methods and their Web API routes now refresh cached membership state before applying ACL checks, so a long-lived reader no longer exposes team memories through its stale membership cache.
+
 ## [1.9.0] — 2026-08-19
 
 - **Team rename, in the CLI and the console.** A team id is not just a row key:

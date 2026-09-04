@@ -94,6 +94,7 @@ class MemoryClient:
         requester_team_id: str | None = None,
     ) -> MemoryRecord | None:
         """ACL-gated single-memory fetch (see MemoryStore.get_visible)."""
+        self._refresh_external_state()
         return self.store.get_visible(
             memory_id,
             requester_agent_id=requester_agent_id,
@@ -416,6 +417,7 @@ class MemoryClient:
         limit: int = 20,
         offset: int = 0,
     ) -> list[MemoryRecord]:
+        self._refresh_external_state()
         return self.store.list_recent(
             owner=owner,
             scope=scope,
@@ -433,6 +435,7 @@ class MemoryClient:
         requester_team_id: str | None = None,
         limit: int = 300,
     ) -> dict[str, list[dict]]:
+        self._refresh_external_state()
         return self.store.graph_snapshot(
             requester_agent_id=requester_agent_id,
             requester_team_id=requester_team_id,
