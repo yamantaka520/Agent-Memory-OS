@@ -4,6 +4,10 @@ All notable changes, newest first. Releases are published to
 [PyPI](https://pypi.org/project/agent-memory-os/) via Trusted Publishing and
 tagged on GitHub/GitLab.
 
+## [Unreleased]
+
+- **Fix API authentication under mounted path prefixes.** Token and fleet capability checks now classify the router's effective path, preserving the existing token tiers and pairing exception under path prefixes. Fleet signatures continue to cover the original request path and query.
+
 ## [1.9.0] — 2026-08-19
 
 - **Team rename, in the CLI and the console.** A team id is not just a row key:
