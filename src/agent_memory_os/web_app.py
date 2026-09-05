@@ -24,6 +24,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 
 from .client import MemoryClient
+from .constants import (
+    WEB_FLEET_CONTENT_PREFIXES,
+    WEB_FLEET_SIGNATURE_FRESHNESS_SECONDS,
+    WEB_LOG_TAIL_READ_BYTES,
+)
 from .schema import (
     MemoryRecord,
     PUBLIC_MEMORY_SCOPES,
@@ -323,14 +328,8 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
         # operator granted (fleet_admins). Content-bearing routes additionally
         # require the 'read-private' capability — a manage-only admin can
         # operate the node but never read memory content.
-        FLEET_FRESHNESS_S = 120
-        FLEET_CONTENT_PREFIXES = (
-            "/api/memories", "/api/search", "/api/recall", "/api/context-pack",
-            "/api/orchestrate", "/api/archive", "/api/graph", "/api/sync/export",
-        )
-
         def _fleet_required_cap(path: str) -> str:
-            if any(path.startswith(p) for p in FLEET_CONTENT_PREFIXES):
+            if any(path.startswith(p) for p in WEB_FLEET_CONTENT_PREFIXES):
                 return "read-private"
             return "manage"
 
@@ -352,7 +351,7 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
                 skew = abs(time.time() - int(timestamp))
             except ValueError:
                 return False, key_id, "malformed timestamp"
-            if skew > FLEET_FRESHNESS_S:
+            if skew > WEB_FLEET_SIGNATURE_FRESHNESS_SECONDS:
                 return False, key_id, "signature expired"
             target = request.url.path + (
                 f"?{request.url.query}" if request.url.query else "")
@@ -1006,8 +1005,6 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
             status_code=status,
         )
 
-    LOG_TAIL_READ_BYTES = 2_000_000  # bounded read so huge logs can't OOM the console
-
     @app.get("/api/logs")
     def logs_view(
         file: str | None = None,
@@ -1049,11 +1046,11 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
             chosen_name, chosen = match
         size = chosen.stat().st_size
         with open(chosen, "rb") as handle:
-            if size > LOG_TAIL_READ_BYTES:
-                handle.seek(size - LOG_TAIL_READ_BYTES)
+            if size > WEB_LOG_TAIL_READ_BYTES:
+                handle.seek(size - WEB_LOG_TAIL_READ_BYTES)
             text = handle.read().decode("utf-8", errors="replace")
         rows = text.splitlines()
-        truncated = size > LOG_TAIL_READ_BYTES
+        truncated = size > WEB_LOG_TAIL_READ_BYTES
         if truncated and rows:
             rows = rows[1:]  # drop the partial first line of the window
         if q:

@@ -23,21 +23,34 @@ from .constants import (
     CONSOLIDATION_MIN_ACTIVATIONS,
     CONSOLIDATION_MIN_CLUSTER_SIZE,
     CONSOLIDATION_MIN_CLUSTER_WEIGHT,
+    DASHBOARD_ACTIVITY_WINDOW_DAYS,
+    DECAY_FEEDBACK_MAX_HALF_LIFE_DAYS,
+    DECAY_FEEDBACK_MAX_MULTIPLIER,
+    DECAY_FEEDBACK_MIN_HALF_LIFE_DAYS,
+    DECAY_FEEDBACK_MIN_MULTIPLIER,
+    DECAY_FEEDBACK_ROUND_DIGITS,
+    DECAY_FEEDBACK_UPDATE_THRESHOLD_DAYS,
+    DEFAULT_DECAY_HALF_LIFE_DAYS,
+    DEFAULT_DECAY_HALF_LIFE_FALLBACK_DAYS,
+    FLEET_NONCE_RETENTION_SECONDS,
     LEGACY_CONTEXT_OWNER,
     LINK_DECAY_HALF_LIFE_DAYS,
     MAX_RESONANCE_CANDIDATES,
     MAX_SEMANTIC_CANDIDATES,
+    MEMBERSHIP_CACHE_TTL_SECONDS,
     NEGATIVE_FEEDBACK_CONFIDENCE_STEP,
+    PAIRING_INVITE_TTL_SECONDS,
     RESONANCE_CONVERGENCE_CAP,
     RESONANCE_HOP_DECAY,
     RESONANCE_MAX_EDGES_PER_NODE,
     RETENTION_MIN_HALF_LIVES,
+    SNAPSHOT_RETENTION_COUNT_PER_SESSION,
+    SQLITE_BUSY_TIMEOUT_MILLISECONDS,
     SUPERSEDED_SCORE_PENALTY,
 )
 from .database_schema import SCHEMA
 from .migrations import MIGRATIONS, Migration
 from .schema import (
-    DEFAULT_DECAY_HALF_LIFE_DAYS,
     MemoryLink,
     MemoryRecord,
     RecallProfile,
@@ -92,7 +105,7 @@ class MemoryStore:
         # readers coexist with a writer and busy_timeout absorbs write races.
         # Both PRAGMAs degrade gracefully where unsupported (e.g. some network
         # filesystems keep journal_mode unchanged).
-        self.conn.execute("PRAGMA busy_timeout=5000")
+        self.conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MILLISECONDS}")
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
         self._run_migrations()
@@ -567,7 +580,7 @@ class MemoryStore:
         )
         self.conn.commit()
 
-    def rotate_snapshots(self, *, keep_per_session: int = 5) -> int:
+    def rotate_snapshots(self, *, keep_per_session: int = SNAPSHOT_RETENTION_COUNT_PER_SESSION) -> int:
         """Archive all but the newest N context snapshots per session.
 
         Pinned snapshots are never rotated out — they follow the same rule as
@@ -1469,7 +1482,7 @@ class MemoryStore:
     # ------------------------------------------------------------------ #
 
     def create_pairing_invite(
-        self, team_id: str, code_hash: str, *, ttl_seconds: int = 600
+        self, team_id: str, code_hash: str, *, ttl_seconds: int = PAIRING_INVITE_TTL_SECONDS
     ) -> dict[str, object]:
         if not self.get_team(team_id):
             raise ValueError(f"unknown team: {team_id}")
@@ -1586,7 +1599,7 @@ class MemoryStore:
         self._org_audit("fleet_op", detail, f"fleet:{key_id}")
         self.conn.commit()
 
-    def consume_fleet_nonce(self, nonce: str, *, prune_older_than_s: int = 600) -> bool:
+    def consume_fleet_nonce(self, nonce: str, *, prune_older_than_s: int = FLEET_NONCE_RETENTION_SECONDS) -> bool:
         """Atomically claim a signature nonce; False if already seen (replay).
 
         Nonces only need to outlive the signature-freshness window; anything
@@ -1954,11 +1967,23 @@ class MemoryStore:
             # otherwise a custom half-life is clobbered on every retention pass.
             base = row["decay_base_half_life_days"]
             if base is None:
-                base = DEFAULT_DECAY_HALF_LIFE_DAYS.get(row["type"], 30.0)
+                base = DEFAULT_DECAY_HALF_LIFE_DAYS.get(row["type"], DEFAULT_DECAY_HALF_LIFE_FALLBACK_DAYS)
             multiplier = math.sqrt((1 + row["helpful_count"]) / (1 + row["unhelpful_count"]))
-            multiplier = min(4.0, max(0.5, multiplier))
-            new_half_life = round(min(730.0, max(7.0, base * multiplier)), 2)
-            if abs(new_half_life - float(row["decay_half_life_days"])) >= 0.01:
+            multiplier = min(
+                DECAY_FEEDBACK_MAX_MULTIPLIER,
+                max(DECAY_FEEDBACK_MIN_MULTIPLIER, multiplier),
+            )
+            new_half_life = round(
+                min(
+                    DECAY_FEEDBACK_MAX_HALF_LIFE_DAYS,
+                    max(DECAY_FEEDBACK_MIN_HALF_LIFE_DAYS, base * multiplier),
+                ),
+                DECAY_FEEDBACK_ROUND_DIGITS,
+            )
+            if (
+                abs(new_half_life - float(row["decay_half_life_days"]))
+                >= DECAY_FEEDBACK_UPDATE_THRESHOLD_DAYS
+            ):
                 self.conn.execute(
                     "UPDATE memories SET decay_half_life_days = ? WHERE id = ?",
                     (new_half_life, row["id"]),
@@ -3182,7 +3207,7 @@ class MemoryStore:
     # membership change made through THIS store invalidates immediately; a
     # change from another process/connection (WAL multi-writer) is picked up
     # within this TTL instead of persisting until restart.
-    _TEAMS_CACHE_TTL_SECONDS = 30.0
+    _TEAMS_CACHE_TTL_SECONDS = MEMBERSHIP_CACHE_TTL_SECONDS
 
     def _cached_teams_for(self, agent_id: str) -> list[str]:
         cache = getattr(self, "_teams_cache", None)
@@ -3294,7 +3319,7 @@ class MemoryStore:
         links = self.conn.execute("SELECT COUNT(*) FROM memory_links").fetchone()[0]
         return {"total": total, "by_scope": by_scope, "by_type": by_type, "links": links}
 
-    def dashboard_stats(self, *, activity_days: int = 14) -> dict[str, object]:
+    def dashboard_stats(self, *, activity_days: int = DASHBOARD_ACTIVITY_WINDOW_DAYS) -> dict[str, object]:
         """Aggregate figures for the console dashboard."""
         now = utc_now()
         base = self.stats()

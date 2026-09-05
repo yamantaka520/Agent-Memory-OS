@@ -23,6 +23,10 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from .constants import (
+    SETTINGS_PORT_PROBE_TIMEOUT_SECONDS,
+    SETTINGS_PORT_SEARCH_LIMIT,
+)
 from .tokens import resolve_home
 
 SETTINGS_FILENAME = "instance.toml"
@@ -145,12 +149,12 @@ def port_is_free(host: str, port: int) -> bool:
     """
     target = "127.0.0.1" if host in ("", "0.0.0.0", "::") else host
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(0.3)
+        sock.settimeout(SETTINGS_PORT_PROBE_TIMEOUT_SECONDS)
         # connect_ex == 0 means the connection succeeded → something is listening.
         return sock.connect_ex((target, port)) != 0
 
 
-def find_available_port(host: str, preferred: int, *, limit: int = 64) -> int:
+def find_available_port(host: str, preferred: int, *, limit: int = SETTINGS_PORT_SEARCH_LIMIT) -> int:
     """Return `preferred` if free, otherwise the next free port above it.
 
     Lets several instances on one machine start without hand-assigning ports.

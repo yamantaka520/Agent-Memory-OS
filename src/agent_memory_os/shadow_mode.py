@@ -15,6 +15,11 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Iterable, Any
 
+from .constants import (
+    SHADOW_P99_LATENCY_PAUSE_MILLISECONDS,
+    SHADOW_P99_LATENCY_TARGET_MILLISECONDS,
+)
+
 
 @dataclass(frozen=True)
 class ShadowModePolicy:
@@ -22,8 +27,8 @@ class ShadowModePolicy:
 
     phase: str = "Phase 1: Silent Mirroring"
     recall_target: float = 0.95
-    p99_latency_target_ms: float = 200.0
-    p99_latency_pause_ms: float = 500.0
+    p99_latency_target_ms: float = SHADOW_P99_LATENCY_TARGET_MILLISECONDS
+    p99_latency_pause_ms: float = SHADOW_P99_LATENCY_PAUSE_MILLISECONDS
 
 
 class ShadowRecallMonitor:

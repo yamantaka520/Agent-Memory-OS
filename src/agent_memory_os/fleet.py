@@ -22,8 +22,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from . import crypto
+from .constants import FLEET_HTTP_TIMEOUT_SECONDS
 
-DEFAULT_TIMEOUT = 10
+DEFAULT_TIMEOUT = FLEET_HTTP_TIMEOUT_SECONDS
 
 
 class FleetKeyMissing(RuntimeError):

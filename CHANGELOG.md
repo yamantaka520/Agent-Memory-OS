@@ -4,6 +4,10 @@ All notable changes, newest first. Releases are published to
 [PyPI](https://pypi.org/project/agent-memory-os/) via Trusted Publishing and
 tagged on GitHub/GitLab.
 
+## [Unreleased]
+
+- Centralize operational defaults and Web UI constants in `constants.py`, preserving their values, existing aliases, and generated output.
+
 ## [1.9.0] — 2026-08-19
 
 - **Team rename, in the CLI and the console.** A team id is not just a row key:
