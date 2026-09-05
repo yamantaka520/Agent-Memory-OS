@@ -5,6 +5,18 @@ import json
 from pathlib import Path
 
 from .client import MemoryClient
+from .constants import (
+    PAIRING_INVITE_TTL_SECONDS,
+    PROCESS_ELAPSED_QUERY_TIMEOUT_SECONDS,
+    PROCESS_LIST_TIMEOUT_SECONDS,
+    PYPI_REQUEST_TIMEOUT_SECONDS,
+    SCHEDULED_TASK_QUERY_TIMEOUT_SECONDS,
+    STALE_PROCESS_START_SLACK_SECONDS,
+    TEAM_UPDATE_REQUEST_TIMEOUT_SECONDS,
+    WEB_RESTART_LIVENESS_DELAY_SECONDS,
+    WEB_RESTART_POLL_ATTEMPTS,
+    WEB_RESTART_POLL_INTERVAL_SECONDS,
+)
 from .golden_recall import evaluate_golden_queries, load_golden_query_cases
 from .hermes_importer import import_hermes_memory_files
 from .importers import SUPPORTED as IMPORT_SOURCES
@@ -162,8 +174,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="rename: skip the confirmation prompt")
     team.add_argument("--dry-run", action="store_true",
                       help="rename: report what would move, change nothing")
-    team.add_argument("--ttl", type=int, default=600,
-                      help="invite: pairing-code lifetime in seconds (default 600)")
+    team.add_argument("--ttl", type=int, default=PAIRING_INVITE_TTL_SECONDS,
+                      help=f"invite: pairing-code lifetime in seconds (default {PAIRING_INVITE_TTL_SECONDS})")
 
     join = sub.add_parser(
         "join",
@@ -544,7 +556,7 @@ def _cmd_team_update(client, own_version: str) -> int:
             headers={"Authorization": f"Bearer {token}"} if token else {},
         )
         try:
-            with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+            with urllib.request.urlopen(request, timeout=TEAM_UPDATE_REQUEST_TIMEOUT_SECONDS) as response:  # noqa: S310
                 payload = _json.loads(response.read().decode("utf-8"))
             print(f"  {label}: {peer_ver or '?'} → update started ({payload.get('status', 'ok')})")
         except Exception as exc:  # noqa: BLE001
@@ -864,7 +876,7 @@ def _pypi_latest(pkg: str) -> str | None:
     global _PYPI_LAST_ERROR
     import urllib.request
     try:
-        with urllib.request.urlopen(f"https://pypi.org/pypi/{pkg}/json", timeout=6) as resp:
+        with urllib.request.urlopen(f"https://pypi.org/pypi/{pkg}/json", timeout=PYPI_REQUEST_TIMEOUT_SECONDS) as resp:
             _PYPI_LAST_ERROR = None
             return json.load(resp)["info"]["version"]
     except Exception as exc:  # noqa: BLE001 - offline / unreachable is a normal outcome
@@ -887,10 +899,10 @@ def _running_amos_processes() -> list[tuple[int, str, str]]:
             out = subprocess.check_output(
                 ["powershell", "-NoProfile", "-Command",
                  'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }'],
-                text=True, timeout=10)
+                text=True, timeout=PROCESS_LIST_TIMEOUT_SECONDS)
             rows = [line.split("\t", 1) for line in out.splitlines() if "\t" in line]
         else:
-            out = subprocess.check_output(["ps", "-axo", "pid=,command="], text=True, timeout=10)
+            out = subprocess.check_output(["ps", "-axo", "pid=,command="], text=True, timeout=PROCESS_LIST_TIMEOUT_SECONDS)
             rows = [line.strip().split(None, 1) for line in out.splitlines() if line.strip()]
     except Exception:  # noqa: BLE001 - process listing is best-effort
         return []
@@ -962,7 +974,7 @@ def _proc_start_ts(pid: int) -> float | None:
     if sys.platform == "win32":
         return None  # unknown -> caller treats as not-provably-stale
     try:
-        out = subprocess.check_output(["ps", "-p", str(pid), "-o", "etime="], text=True, timeout=5)
+        out = subprocess.check_output(["ps", "-p", str(pid), "-o", "etime="], text=True, timeout=PROCESS_ELAPSED_QUERY_TIMEOUT_SECONDS)
     except Exception:  # noqa: BLE001
         return None
     elapsed = _parse_etime(out)
@@ -988,7 +1000,7 @@ def _stale_amos_processes() -> list[tuple[int, str, str]]:
     for pid, kind, cmd in _running_amos_processes():
         started = _proc_start_ts(pid)
         # 90s slack absorbs ps's minute-resolution etime.
-        if started is not None and started < installed - 90:
+        if started is not None and started < installed - STALE_PROCESS_START_SLACK_SECONDS:
             stale.append((pid, kind, cmd))
     return stale
 
@@ -1026,12 +1038,12 @@ def _restart_web_from_pidfile(home) -> str:
         os.kill(pid, signal.SIGTERM)
     except OSError:
         return f"could not signal pid {pid} — restart the console manually"
-    for _ in range(40):  # up to ~10s for the port to be released
+    for _ in range(WEB_RESTART_POLL_ATTEMPTS):  # up to ~10s for the port to be released
         try:
             os.kill(pid, 0)
         except OSError:
             break
-        time.sleep(0.25)
+        time.sleep(WEB_RESTART_POLL_INTERVAL_SECONDS)
     stdout = subprocess.DEVNULL
     stderr = subprocess.DEVNULL
     try:
@@ -1049,7 +1061,7 @@ def _restart_web_from_pidfile(home) -> str:
                                  start_new_session=True)
     except Exception as exc:  # noqa: BLE001
         return f"relaunch failed ({exc}) — restart the console manually"
-    time.sleep(1.0)  # liveness: confirm the new process didn't immediately die
+    time.sleep(WEB_RESTART_LIVENESS_DELAY_SECONDS)  # liveness: confirm the new process didn't immediately die
     if child.poll() is not None:
         return (f"relaunched process exited (code {child.returncode}) — the old "
                 f"port may still be held; restart the console manually")
@@ -1067,7 +1079,7 @@ def _web_service_installed() -> bool:
         try:
             return subprocess.run(
                 ["schtasks", "/Query", "/TN", svc.SERVICE_NAME],
-                capture_output=True, timeout=10,
+                capture_output=True, timeout=SCHEDULED_TASK_QUERY_TIMEOUT_SECONDS,
             ).returncode == 0
         except Exception:  # noqa: BLE001
             return False

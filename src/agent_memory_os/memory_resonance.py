@@ -13,6 +13,17 @@ import re
 import time
 from typing import DefaultDict, Iterable
 
+from .constants import (
+    ERA_PROTOTYPE_DECAY_LAMBDA_PER_SECOND,
+    ERA_PROTOTYPE_DEFAULT_HOPS,
+    ERA_PROTOTYPE_INVALID_TIMESTAMP_FALLBACK_SECONDS,
+    ERA_PROTOTYPE_LINK_MAX_TERM_DEGREE,
+    ERA_PROTOTYPE_LINK_MAX_WEIGHT,
+    ERA_PROTOTYPE_LINK_MIN_SHARED_TERMS,
+    ERA_PROTOTYPE_LINK_SHARED_TERMS_FOR_MAX_WEIGHT,
+    ERA_PROTOTYPE_MIN_WEIGHT,
+)
+
 _TOKEN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_.-]*\b")
 _VERSION_RE = re.compile(r"\bv\d+(?:\.\d+)+\b", re.IGNORECASE)
 _USES_RE = re.compile(
@@ -63,13 +74,13 @@ class ResonanceWeight:
         try:
             stamp = float(timestamp)
         except (TypeError, ValueError):
-            stamp = 0.0
+            stamp = ERA_PROTOTYPE_INVALID_TIMESTAMP_FALLBACK_SECONDS
         delta_t = max(0.0, current_time - stamp)
         # Decay constant: reduced from 0.00000133 to 0.0000008 to mitigate recall drop
-        decay_lambda = 0.0000008
+        decay_lambda = ERA_PROTOTYPE_DECAY_LAMBDA_PER_SECOND
         decay_factor = math.exp(-decay_lambda * delta_t)
         # Weight floor prevents total resonance collapse for old chunks
-        min_weight = 0.01
+        min_weight = ERA_PROTOTYPE_MIN_WEIGHT
         return max(min_weight, base_strength * decay_factor)
 
 
@@ -109,7 +120,7 @@ class ERATripletIndex:
         """Return extracted ERA triplets for a chunk."""
         return set(self._triplets_by_chunk.get(chunk_id, set()))
 
-    def resonance_cluster(self, seed_chunk_ids: Iterable[str], *, hops: int = 2) -> list[str]:
+    def resonance_cluster(self, seed_chunk_ids: Iterable[str], *, hops: int = ERA_PROTOTYPE_DEFAULT_HOPS) -> list[str]:
         """Expand seed chunks through shared ERA terms and rank the cluster.
 
         Ranking is deterministic: seeds first, then closer graph distance, then
@@ -149,8 +160,8 @@ class ERATripletIndex:
     def derive_links(
         self,
         *,
-        min_shared_terms: int = 2,
-        max_term_degree: int = 20,
+        min_shared_terms: int = ERA_PROTOTYPE_LINK_MIN_SHARED_TERMS,
+        max_term_degree: int = ERA_PROTOTYPE_LINK_MAX_TERM_DEGREE,
     ) -> list[tuple[str, str, float]]:
         """Derive weak association edges from shared ERA terms between chunks.
 
@@ -170,7 +181,7 @@ class ERATripletIndex:
                 for dst_id in ordered[i + 1:]:
                     shared_counts[(src_id, dst_id)] += 1
         return [
-            (src_id, dst_id, min(1.0, shared / 5.0))
+            (src_id, dst_id, min(ERA_PROTOTYPE_LINK_MAX_WEIGHT, shared / ERA_PROTOTYPE_LINK_SHARED_TERMS_FOR_MAX_WEIGHT))
             for (src_id, dst_id), shared in sorted(shared_counts.items())
             if shared >= min_shared_terms
         ]

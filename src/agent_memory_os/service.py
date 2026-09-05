@@ -19,6 +19,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .constants import SYSTEMD_RESTART_DELAY_SECONDS
 from .tokens import resolve_home
 
 SERVICE_LABEL = "com.agent-memory-os.web"
@@ -95,7 +96,7 @@ After=network.target
 [Service]
 ExecStart={exec_start}
 Restart=on-failure
-RestartSec=3
+RestartSec={SYSTEMD_RESTART_DELAY_SECONDS}
 
 [Install]
 WantedBy=default.target

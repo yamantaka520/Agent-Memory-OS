@@ -1,4 +1,6 @@
-SCHEMA = """
+from .constants import DEFAULT_DECAY_HALF_LIFE_FALLBACK_DAYS
+
+SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS memories (
   id TEXT PRIMARY KEY,
   owner TEXT NOT NULL,
@@ -8,14 +10,14 @@ CREATE TABLE IF NOT EXISTS memories (
   summary TEXT NOT NULL,
   tags TEXT NOT NULL DEFAULT '[]',
   visibility TEXT NOT NULL DEFAULT '[]',
-  source TEXT NOT NULL DEFAULT '{}',
+  source TEXT NOT NULL DEFAULT '{{}}',
   confidence REAL NOT NULL DEFAULT 0.8,
   importance REAL NOT NULL DEFAULT 0.5,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   expires_at TEXT,
   decay_policy TEXT NOT NULL DEFAULT 'exponential',
-  decay_half_life_days REAL NOT NULL DEFAULT 30.0,
+  decay_half_life_days REAL NOT NULL DEFAULT {DEFAULT_DECAY_HALF_LIFE_FALLBACK_DAYS},
   last_accessed_at TEXT,
   access_count INTEGER NOT NULL DEFAULT 0,
   pinned INTEGER NOT NULL DEFAULT 0
@@ -51,15 +53,15 @@ CREATE TABLE IF NOT EXISTS memory_links (
   updated_at TEXT NOT NULL,
   last_activated_at TEXT,
   activation_count INTEGER NOT NULL DEFAULT 0,
-  source TEXT NOT NULL DEFAULT '{}',
+  source TEXT NOT NULL DEFAULT '{{}}',
   PRIMARY KEY (src_id, dst_id, relation)
 );
 CREATE INDEX IF NOT EXISTS memory_links_src ON memory_links(src_id);
 CREATE INDEX IF NOT EXISTS memory_links_dst ON memory_links(dst_id);
 CREATE TABLE IF NOT EXISTS recall_profiles (
   agent_id TEXT PRIMARY KEY,
-  type_weights TEXT NOT NULL DEFAULT '{}',
-  scope_weights TEXT NOT NULL DEFAULT '{}',
+  type_weights TEXT NOT NULL DEFAULT '{{}}',
+  scope_weights TEXT NOT NULL DEFAULT '{{}}',
   updated_at TEXT NOT NULL
 );
 """

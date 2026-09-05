@@ -6,6 +6,10 @@ from typing import Any
 import json
 import uuid
 
+from .constants import (
+    DEFAULT_DECAY_HALF_LIFE_DAYS,
+    DEFAULT_DECAY_HALF_LIFE_FALLBACK_DAYS,
+)
 from .scoring import VALID_DECAY_POLICIES
 
 
@@ -51,17 +55,6 @@ def utc_now_micro() -> str:
 
 def new_memory_id() -> str:
     return "mem_" + uuid.uuid4().hex
-
-
-DEFAULT_DECAY_HALF_LIFE_DAYS = {
-    "preference": 180.0,
-    "fact": 90.0,
-    "procedure": 365.0,
-    "environment": 30.0,
-    "decision": 180.0,
-    "warning": 365.0,
-    "note": 30.0,
-}
 
 
 @dataclass(slots=True)
@@ -130,7 +123,7 @@ class MemoryRecord:
         if self.decay_policy not in VALID_DECAY_POLICIES:
             raise ValueError(f"decay_policy must be one of {sorted(VALID_DECAY_POLICIES)}")
         if self.decay_half_life_days is None:
-            self.decay_half_life_days = DEFAULT_DECAY_HALF_LIFE_DAYS.get(self.type, 30.0)
+            self.decay_half_life_days = DEFAULT_DECAY_HALF_LIFE_DAYS.get(self.type, DEFAULT_DECAY_HALF_LIFE_FALLBACK_DAYS)
         if self.decay_policy != "none" and self.decay_half_life_days <= 0:
             raise ValueError("decay_half_life_days must be positive")
         if self.access_count < 0:
