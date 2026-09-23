@@ -183,6 +183,10 @@ MCP tools (11): `memory_add`, `memory_search`, `memory_context_pack`,
 
 ## 6. Federation & project sync
 
+In **Tools → Federation**, file imports and **Sync mesh now** show a latest-operation report with the bundle or target node, named record counts, and expandable response details. Mesh results list each peer separately, including failures and rejected organization records. The report stays visible until another operation or a page reload; it is not a stored history.
+
+File imports and bundle downloads use the local node. Mesh sync uses the currently selected node. An **Import rolled back** result is shown only when the server confirms that none of that bundle's records were applied. If a response is lost, the result is unconfirmed—check the node before retrying. A failed peer sync may have completed earlier steps, so its failure does not imply that all changes were rolled back.
+
 ```bash
 # on each host: mint a sync-scoped token to give peers (NOT the admin token)
 agent-memory token create --sync                       # prints amos_sync_…

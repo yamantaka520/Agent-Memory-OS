@@ -102,6 +102,21 @@ PAGE = r"""<!doctype html>
   }
   button.ghost:hover { border-color: var(--accent); color: var(--accent); }
 
+  .sync-report { margin-top: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); overflow-wrap: anywhere; }
+  .sync-report h4, .sync-report h5, .sync-report p { margin: 0 0 8px; }
+  .sync-status { font-weight: 650; }
+  .sync-status.good { color: var(--good); }
+  .sync-status.warn { color: var(--warn); }
+  .sync-status.bad { color: var(--bad); }
+  .sync-report summary { cursor: pointer; font-weight: 600; }
+  .sync-peer { padding: 10px 0; border-top: 1px solid var(--border); }
+  .sync-peer h5 { margin-top: 12px; }
+  .sync-counts { width: 100%; margin: 8px 0 12px; border-collapse: collapse; font-size: 13px; }
+  .sync-counts th { text-align: left; font-weight: 400; }
+  .sync-counts td { text-align: right; font-variant-numeric: tabular-nums; }
+  .sync-counts th, .sync-counts td { padding: 3px 8px; border-bottom: 1px solid var(--border); }
+  .sync-detail { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; font-size: 12px; padding: 10px; background: var(--panel); border-radius: 8px; }
+
   .cards { display: flex; flex-direction: column; gap: 14px; }
   .card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
@@ -607,7 +622,9 @@ PAGE = r"""<!doctype html>
           <input type="file" id="bundle-file" accept=".jsonl" style="flex:1;min-width:160px">
           <button class="ghost" id="btn-bundle-import">⬆ Import bundle</button>
         </div>
-        <div id="sync-out" style="margin-top:6px;font-size:13px;color:var(--muted)"></div>
+        <p class="hint">Downloads and file imports use this node.</p>
+        <div id="sync-out" class="sync-report" aria-live="polite" hidden></div>
+        <p class="hint">The latest result stays here until another operation or page reload.</p>
         <div class="row" style="margin-top:12px">
           <input id="peer-url" type="text" placeholder="peer url, e.g. http://host:8000">
           <input id="peer-token" type="password" placeholder="peer token (optional)" style="max-width:180px">
@@ -807,6 +824,14 @@ let locale = localStorage.getItem("amos.locale") || (() => {
   if (/^ko/i.test(nav)) return "ko";
   return "en";
 })();
+
+/* ---------- federation result translations ---------- */
+Object.assign(I18N["zh-TW"], {"Import bundle": "匯入套件", "Peer sync": "節點同步", "This node": "本節點", "Target": "目標", "Bundle": "套件", "Completed": "已完成", "Failed": "失敗", "Completed with failures": "已結束，部分失敗", "Completed with rejected records": "已完成，部分紀錄遭拒", "No peers to sync": "沒有可同步的節點", "Peers completed": "已完成的節點", "Peers failed": "失敗的節點", "Received from peer": "從節點接收", "Sent to peer": "傳送至節點", "Response details": "回應詳情", "Memories added": "新增記憶", "Memories updated": "更新記憶", "Memories skipped": "略過記憶", "Links added": "新增關聯", "Links merged": "合併關聯", "Profiles applied": "已套用設定檔", "Memory deletions applied": "已套用記憶刪除", "Teams applied": "已套用團隊", "Projects applied": "已套用專案", "Organization deletions applied": "已套用組織刪除", "Organization records rejected": "遭拒的組織紀錄", "Import rolled back": "匯入已回復", "No records from this bundle were applied.": "未套用此套件的任何紀錄。", "The outcome could not be confirmed. Check the node before retrying.": "無法確認結果。請先檢查節點再重試。", "Some records may already have been applied before this peer failed.": "此節點失敗前可能已套用部分紀錄。", "The server returned an unreadable result.": "伺服器傳回無法讀取的結果。", "No error detail was returned.": "未傳回錯誤詳情。", "Choose a .jsonl bundle first.": "請先選擇 .jsonl 套件。", "Downloads and file imports use this node.": "下載與檔案匯入使用本節點。", "The latest result stays here until another operation or page reload.": "最新結果會保留至下一次操作或重新載入頁面。"});
+Object.assign(I18N["zh-CN"], {"Import bundle": "导入包", "Peer sync": "节点同步", "This node": "本节点", "Target": "目标", "Bundle": "包", "Completed": "已完成", "Failed": "失败", "Completed with failures": "已结束，部分失败", "Completed with rejected records": "已完成，部分记录被拒绝", "No peers to sync": "没有可同步的节点", "Peers completed": "已完成的节点", "Peers failed": "失败的节点", "Received from peer": "从节点接收", "Sent to peer": "发送至节点", "Response details": "响应详情", "Memories added": "新增记忆", "Memories updated": "更新记忆", "Memories skipped": "跳过记忆", "Links added": "新增关联", "Links merged": "合并关联", "Profiles applied": "已应用配置", "Memory deletions applied": "已应用记忆删除", "Teams applied": "已应用团队", "Projects applied": "已应用项目", "Organization deletions applied": "已应用组织删除", "Organization records rejected": "被拒绝的组织记录", "Import rolled back": "导入已回滚", "No records from this bundle were applied.": "未应用此包中的任何记录。", "The outcome could not be confirmed. Check the node before retrying.": "无法确认结果。请先检查节点再重试。", "Some records may already have been applied before this peer failed.": "此节点失败前可能已应用部分记录。", "The server returned an unreadable result.": "服务器返回了无法读取的结果。", "No error detail was returned.": "未返回错误详情。", "Choose a .jsonl bundle first.": "请先选择 .jsonl 包。", "Downloads and file imports use this node.": "下载和文件导入使用本节点。", "The latest result stays here until another operation or page reload.": "最新结果会保留至下一次操作或重新加载页面。"});
+Object.assign(I18N["ja"], {"Import bundle": "バンドルをインポート", "Peer sync": "ピア同期", "This node": "このノード", "Target": "対象", "Bundle": "バンドル", "Completed": "完了", "Failed": "失敗", "Completed with failures": "一部失敗して終了", "Completed with rejected records": "一部レコードを拒否して完了", "No peers to sync": "同期するピアがありません", "Peers completed": "完了したピア", "Peers failed": "失敗したピア", "Received from peer": "ピアから受信", "Sent to peer": "ピアへ送信", "Response details": "応答の詳細", "Memories added": "追加した記憶", "Memories updated": "更新した記憶", "Memories skipped": "スキップした記憶", "Links added": "追加したリンク", "Links merged": "マージしたリンク", "Profiles applied": "適用したプロファイル", "Memory deletions applied": "適用した記憶の削除", "Teams applied": "適用したチーム", "Projects applied": "適用したプロジェクト", "Organization deletions applied": "適用した組織の削除", "Organization records rejected": "拒否した組織レコード", "Import rolled back": "インポートをロールバックしました", "No records from this bundle were applied.": "このバンドルのレコードは適用されていません。", "The outcome could not be confirmed. Check the node before retrying.": "結果を確認できませんでした。再試行前にノードを確認してください。", "Some records may already have been applied before this peer failed.": "このピアで失敗する前に一部のレコードが適用された可能性があります。", "The server returned an unreadable result.": "サーバーが読み取れない結果を返しました。", "No error detail was returned.": "エラーの詳細が返されませんでした。", "Choose a .jsonl bundle first.": "先に .jsonl バンドルを選択してください。", "Downloads and file imports use this node.": "ダウンロードとファイルのインポートはこのノードを使用します。", "The latest result stays here until another operation or page reload.": "次の操作またはページの再読み込みまで最新の結果を表示します。"});
+Object.assign(I18N["ko"], {"Import bundle": "번들 가져오기", "Peer sync": "피어 동기화", "This node": "이 노드", "Target": "대상", "Bundle": "번들", "Completed": "완료", "Failed": "실패", "Completed with failures": "일부 실패로 종료", "Completed with rejected records": "일부 레코드 거부 후 완료", "No peers to sync": "동기화할 피어가 없습니다", "Peers completed": "완료된 피어", "Peers failed": "실패한 피어", "Received from peer": "피어에서 수신", "Sent to peer": "피어로 전송", "Response details": "응답 세부 정보", "Memories added": "추가된 기억", "Memories updated": "업데이트된 기억", "Memories skipped": "건너뛴 기억", "Links added": "추가된 연결", "Links merged": "병합된 연결", "Profiles applied": "적용된 프로필", "Memory deletions applied": "적용된 기억 삭제", "Teams applied": "적용된 팀", "Projects applied": "적용된 프로젝트", "Organization deletions applied": "적용된 조직 삭제", "Organization records rejected": "거부된 조직 레코드", "Import rolled back": "가져오기가 롤백되었습니다", "No records from this bundle were applied.": "이 번들의 레코드는 적용되지 않았습니다.", "The outcome could not be confirmed. Check the node before retrying.": "결과를 확인할 수 없습니다. 다시 시도하기 전에 노드를 확인하세요.", "Some records may already have been applied before this peer failed.": "이 피어에서 실패하기 전에 일부 레코드가 이미 적용되었을 수 있습니다.", "The server returned an unreadable result.": "서버에서 읽을 수 없는 결과를 반환했습니다.", "No error detail was returned.": "오류 세부 정보가 반환되지 않았습니다.", "Choose a .jsonl bundle first.": "먼저 .jsonl 번들을 선택하세요.", "Downloads and file imports use this node.": "다운로드와 파일 가져오기는 이 노드를 사용합니다.", "The latest result stays here until another operation or page reload.": "다음 작업이나 페이지 새로고침까지 최신 결과가 여기에 표시됩니다."});
+/* ---------- end federation result translations ---------- */
+
 function t(source) {
   const dictionary = I18N[locale];
   return (dictionary && dictionary[source]) || source;
@@ -837,6 +862,7 @@ function applyLocale() {
     const original = option.dataset.i18n ?? (option.dataset.i18n = option.textContent);
     option.textContent = t(original);
   });
+  translateSyncReport();
 }
 (function mountLocalePicker() {
   const acting = document.querySelector(".acting");
@@ -2349,25 +2375,163 @@ $("btn-retention").addEventListener("click", () => runRetention(null));
 $("btn-retention-decay").addEventListener("click", () => runRetention($("retention-halflives").value));
 refreshArchive();
 
+/* ---------- federation operation results ---------- */
+function syncText(tag, className, source) {
+  const node = el(tag, className, t(source));
+  node.dataset.syncLabel = source;
+  return node;
+}
+function translateSyncReport() {
+  document.querySelectorAll("#sync-out [data-sync-label]").forEach(node => {
+    node.textContent = t(node.dataset.syncLabel);
+  });
+}
+const syncCountLabels = {
+  memories_added: "Memories added", memories_updated: "Memories updated",
+  memories_skipped: "Memories skipped", links_added: "Links added",
+  links_merged: "Links merged", profiles_upserted: "Profiles applied",
+  tombstones_applied: "Memory deletions applied", teams_upserted: "Teams applied",
+  projects_upserted: "Projects applied", org_tombstones_applied: "Organization deletions applied",
+  org_records_rejected: "Organization records rejected"
+};
+function syncBusy(busy) {
+  $("btn-bundle-import").disabled = busy;
+  $("btn-sync-now").disabled = busy;
+  $("sync-out").setAttribute("aria-busy", String(busy));
+}
+function startSyncReport(operation, target, filename) {
+  const out = $("sync-out");
+  out.replaceChildren();
+  out.hidden = false;
+  out.appendChild(syncText("h4", "", operation));
+  const context = el("p", "sm");
+  context.appendChild(syncText("span", "", "Target"));
+  context.appendChild(el("span", "", ": "));
+  context.appendChild(target ? el("span", "", target) : syncText("span", "", "This node"));
+  out.appendChild(context);
+  if (filename) {
+    const bundle = el("p", "sm");
+    bundle.appendChild(syncText("span", "", "Bundle"));
+    bundle.appendChild(el("span", "", ": " + filename));
+    out.appendChild(bundle);
+  }
+  const status = syncText("p", "sync-status", "Working…");
+  out.appendChild(status);
+  syncBusy(true);
+  return { out, status };
+}
+function syncReportStatus(report, message, tone) {
+  report.status.textContent = t(message);
+  report.status.dataset.syncLabel = message;
+  report.status.className = "sync-status " + tone;
+}
+function appendSyncCounts(parent, counts) {
+  const table = el("table", "sync-counts");
+  const body = el("tbody");
+  for (const [key, label] of Object.entries(syncCountLabels)) {
+    if (!counts || typeof counts[key] !== "number") continue;
+    const row = el("tr");
+    const heading = syncText("th", "", label);
+    heading.scope = "row";
+    row.appendChild(heading);
+    row.appendChild(el("td", "", String(counts[key])));
+    body.appendChild(row);
+  }
+  table.appendChild(body);
+  parent.appendChild(table);
+}
+function appendSyncDetails(parent, value) {
+  const details = el("details");
+  details.appendChild(syncText("summary", "", "Response details"));
+  details.appendChild(el("pre", "sync-detail", JSON.stringify(value, null, 2)));
+  parent.appendChild(details);
+}
+function syncFailure(report, error, unconfirmed) {
+  syncReportStatus(report, "Failed", "bad");
+  report.out.appendChild(el("pre", "sync-detail", String(error.message || error)));
+  if (unconfirmed) report.out.appendChild(syncText("p", "sm", "The outcome could not be confirmed. Check the node before retrying."));
+}
+function renderMeshResults(report, results) {
+  const completed = results.filter(r => r.ok === true).length;
+  const rejected = results.some(r => r.pulled?.org_records_rejected > 0 || r.pushed?.org_records_rejected > 0);
+  syncReportStatus(report, results.length === 0 ? "No peers to sync" :
+    completed !== results.length ? "Completed with failures" :
+    rejected ? "Completed with rejected records" : "Completed", completed !== results.length || rejected ? "warn" : "good");
+  const totals = el("p", "sm");
+  totals.appendChild(syncText("span", "", "Peers completed"));
+  totals.appendChild(el("span", "", ": " + completed + " · "));
+  totals.appendChild(syncText("span", "", "Peers failed"));
+  totals.appendChild(el("span", "", ": " + (results.length - completed)));
+  report.out.appendChild(totals);
+  for (const result of results) {
+    const peer = el("details", "sync-peer");
+    peer.open = !result.ok;
+    const rejectedRecords = result.pulled?.org_records_rejected > 0 || result.pushed?.org_records_rejected > 0;
+    const summary = el("summary");
+    summary.appendChild(el("span", "", result.peer + " — "));
+    summary.appendChild(syncText("span", "", result.ok ? (rejectedRecords ? "Completed with rejected records" : "Completed") : "Failed"));
+    peer.appendChild(summary);
+    if (result.ok) {
+      peer.appendChild(syncText("h5", "", "Received from peer"));
+      appendSyncCounts(peer, result.pulled);
+      peer.appendChild(syncText("h5", "", "Sent to peer"));
+      appendSyncCounts(peer, result.pushed);
+    } else {
+      peer.appendChild(result.error ? el("pre", "sync-detail", String(result.error)) : syncText("pre", "sync-detail", "No error detail was returned."));
+      peer.appendChild(syncText("p", "sm", "Some records may already have been applied before this peer failed."));
+    }
+    appendSyncDetails(peer, result);
+    report.out.appendChild(peer);
+  }
+}
+
 $("btn-bundle-export").addEventListener("click", () => { window.location.href = "/api/sync/export"; });
 $("btn-bundle-import").addEventListener("click", async () => {
   const picker = $("bundle-file");
-  if (!picker.files.length) { toast("Choose a .jsonl bundle first.", "err"); return; }
-  const out = $("sync-out");
-  out.textContent = "Importing…";
+  if (!picker.files.length) { toast(t("Choose a .jsonl bundle first."), "err"); return; }
+  const file = picker.files[0];
+  const report = startSyncReport("Import bundle", null, file.name);
+  let submitted = false;
   try {
-    const body = await picker.files[0].text();
+    const body = await file.text();
     const headers = { "content-type": "application/x-ndjson" };
     const token = localStorage.getItem("amos.token");
     if (token) headers["Authorization"] = "Bearer " + token;
-    const response = await fetch("/api/sync/import", { method: "POST", headers: headers, body: body });
-    const stats = await response.json();
-    if (!response.ok) throw new Error(stats.detail || "import failed");
-    out.textContent = "Merged: " + stats.memories_added + " added, " + stats.memories_updated +
-      " updated, " + stats.memories_skipped + " skipped · links +" + stats.links_added + "/" + stats.links_merged + " merged";
+    submitted = true;
+    const response = await fetch("/api/sync/import", { method: "POST", headers, body });
+    let stats;
+    try { stats = await response.json(); }
+    catch (e) { throw new Error(t("The server returned an unreadable result.")); }
+    if (!response.ok) {
+      const rolledBack = response.headers.get("X-AMOS-Import-Outcome") === "rolled-back";
+      syncReportStatus(report, rolledBack ? "Import rolled back" : "Failed", "bad");
+      const detail = stats && stats.detail;
+      report.out.appendChild(detail ? el("pre", "sync-detail", typeof detail === "string" ? detail : JSON.stringify(detail)) : syncText("pre", "sync-detail", "No error detail was returned."));
+      if (rolledBack) report.out.appendChild(syncText("p", "sm", "No records from this bundle were applied."));
+      appendSyncDetails(report.out, stats);
+      return;
+    }
+    if (!stats || typeof stats.memories_added !== "number") throw new Error(t("The server returned an unreadable result."));
+    syncReportStatus(report, stats.org_records_rejected > 0 ? "Completed with rejected records" : "Completed", stats.org_records_rejected > 0 ? "warn" : "good");
+    appendSyncCounts(report.out, stats);
+    appendSyncDetails(report.out, stats);
     loadStats(); loadDashboard(); browseLoaded = false;
-  } catch (e) { out.textContent = ""; toast(e.message, "err"); }
+  } catch (e) { syncFailure(report, e, submitted); }
+  finally { syncBusy(false); }
 });
+$("btn-sync-now").addEventListener("click", async () => {
+  const target = remoteTarget ? remoteTarget.name + " (" + remoteTarget.url + ")" : null;
+  const report = startSyncReport("Peer sync", target);
+  try {
+    const data = await api("/api/sync/run", { method: "POST" });
+    if (!data || !Array.isArray(data.results)) throw new Error(t("The server returned an unreadable result."));
+    renderMeshResults(report, data.results);
+    refreshPeers(); loadStats(); loadDashboard(); browseLoaded = false;
+  } catch (e) { syncFailure(report, e, true); }
+  finally { syncBusy(false); }
+});
+/* ---------- end federation operation results ---------- */
+
 
 async function refreshPeers() {
   const list = $("peer-list");
@@ -2405,16 +2569,6 @@ $("btn-peer-add").addEventListener("click", async () => {
     $("peer-url").value = ""; $("peer-token").value = ""; $("peer-name").value = "";
     toast("Peer registered.", "ok"); refreshPeers();
   } catch (e) { toast(e.message, "err"); }
-});
-$("btn-sync-now").addEventListener("click", async () => {
-  const out = $("sync-out");
-  out.textContent = "Syncing mesh…";
-  try {
-    const data = await api("/api/sync/run", { method: "POST" });
-    const ok = data.results.filter(r => r.ok).length;
-    out.textContent = ok + "/" + data.results.length + " peers converged.";
-    refreshPeers(); loadStats(); loadDashboard(); browseLoaded = false;
-  } catch (e) { out.textContent = ""; toast(e.message, "err"); }
 });
 async function loadNode() {
   try { const n = await api("/api/node"); $("node-name").textContent = "· " + n.node_name; }
