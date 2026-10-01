@@ -1235,7 +1235,12 @@ def create_app(home: str | Path | None = None, *, token: str | None = None,
                     client.store, handle.name, trusted=False, org_scope=None,
                 )
             except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                # import_bundle rolled back before raising. Let the console
+                # distinguish that confirmed outcome from a lost response.
+                raise HTTPException(
+                    status_code=400, detail=str(exc),
+                    headers={"X-AMOS-Import-Outcome": "rolled-back"},
+                ) from exc
             finally:
                 Path(handle.name).unlink(missing_ok=True)
         return stats

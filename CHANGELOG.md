@@ -4,6 +4,10 @@ All notable changes, newest first. Releases are published to
 [PyPI](https://pypi.org/project/agent-memory-os/) via Trusted Publishing and
 tagged on GitHub/GitLab.
 
+## [Unreleased]
+
+- Make bundle import and mesh-sync outcomes inspectable in the Federation panel, with persistent latest-operation results, per-peer details, named counts, and explicit confirmed rollback versus unconfirmed outcomes. Import errors now include a rollback confirmation header when the importer has rolled back; sync and bundle-processing behavior is unchanged.
+
 ## [1.10.1] — 2026-09-22
 
 - Fix cached console search results after adding or removing team/project members through the Web API. Membership routes now invalidate the same client's recall cache, so grants and revocations take effect on the next search.
